@@ -11,9 +11,20 @@ const applicationRoutes = require('./routes/applicationRoutes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ── Middleware ─────────────────────────────────────────────────
+// ── Middleware ──────────────────────────────────────────────────────
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:5173',
+  'http://localhost:5173',
+  'https://nursesathi.vercel.app',
+];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g., mobile apps, Postman)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) return callback(null, true);
+    callback(new Error(`CORS blocked: ${origin}`));
+  },
   credentials: true,
 }));
 app.use(express.json());
@@ -42,16 +53,22 @@ app.use((err, req, res, next) => {
 });
 
 // ── Start ──────────────────────────────────────────────────────
-const start = async () => {
+// Initialize DB then either listen locally or export for Vercel serverless
+const startServer = async () => {
   try {
     await initDB();
-    app.listen(PORT, () => {
-      console.log(`🚀 NurseSathi API running on http://localhost:${PORT}`);
-    });
+    if (process.env.NODE_ENV !== 'production') {
+      app.listen(PORT, () => {
+        console.log(`🚀 NurseSathi API running on http://localhost:${PORT}`);
+      });
+    }
   } catch (err) {
     console.error('Failed to start server:', err);
-    process.exit(1);
+    if (process.env.NODE_ENV !== 'production') process.exit(1);
   }
 };
 
-start();
+startServer();
+
+// Export app for Vercel serverless
+module.exports = app;
